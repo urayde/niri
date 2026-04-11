@@ -4977,6 +4977,7 @@ impl Niri {
                         render_element_states,
                         &feedback.render,
                         &feedback.scanout,
+                        &feedback.r#async,
                     )
                 },
             );
@@ -4992,6 +4993,7 @@ impl Niri {
                         render_element_states,
                         &feedback.render,
                         &feedback.scanout,
+                        &feedback.r#async,
                     )
                 },
             );
@@ -5008,6 +5010,7 @@ impl Niri {
                         render_element_states,
                         &feedback.render,
                         &feedback.scanout,
+                        &feedback.r#async,
                     )
                 },
             );
@@ -5024,6 +5027,7 @@ impl Niri {
                         render_element_states,
                         &feedback.render,
                         &feedback.scanout,
+                        &feedback.r#async,
                     )
                 },
             );
@@ -5040,6 +5044,7 @@ impl Niri {
                         render_element_states,
                         &feedback.render,
                         &feedback.scanout,
+                        &feedback.r#async,
                     )
                 },
             );

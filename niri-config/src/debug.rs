@@ -25,6 +25,7 @@ pub struct Debug {
     pub deactivate_unfocused_windows: bool,
     pub skip_cursor_only_updates_during_vrr: bool,
     pub disable_10bit_output: bool,
+    pub force_tearing: bool,
 }
 
 #[derive(knuffel::Decode, Debug, Default, PartialEq)]
@@ -71,6 +72,8 @@ pub struct DebugPart {
     pub skip_cursor_only_updates_during_vrr: Option<Flag>,
     #[knuffel(child)]
     pub disable_10bit_output: Option<Flag>,
+    #[knuffel(child)]
+    pub force_tearing: Option<Flag>,
 }
 
 impl MergeWith<DebugPart> for Debug {
@@ -95,6 +98,7 @@ impl MergeWith<DebugPart> for Debug {
             deactivate_unfocused_windows,
             skip_cursor_only_updates_during_vrr,
             disable_10bit_output,
+            force_tearing,
         );
 
         merge_clone_opt!((self, part), preview_render, render_drm_device);
