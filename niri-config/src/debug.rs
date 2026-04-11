@@ -25,6 +25,7 @@ pub struct Debug {
     pub honor_xdg_activation_with_invalid_serial: bool,
     pub deactivate_unfocused_windows: bool,
     pub skip_cursor_only_updates_during_vrr: bool,
+    pub force_tearing: bool,
 }
 
 #[derive(knuffel::Decode, Debug, Default, PartialEq)]
@@ -71,6 +72,8 @@ pub struct DebugPart {
     pub deactivate_unfocused_windows: Option<Flag>,
     #[knuffel(child)]
     pub skip_cursor_only_updates_during_vrr: Option<Flag>,
+    #[knuffel(child)]
+    pub force_tearing: Option<Flag>,
 }
 
 impl MergeWith<DebugPart> for Debug {
@@ -95,6 +98,7 @@ impl MergeWith<DebugPart> for Debug {
             honor_xdg_activation_with_invalid_serial,
             deactivate_unfocused_windows,
             skip_cursor_only_updates_during_vrr,
+            force_tearing,
         );
 
         merge_clone_opt!((self, part), preview_render, render_drm_device);
