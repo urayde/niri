@@ -34,6 +34,7 @@ debug {
     skip-cursor-only-updates-during-vrr
     deactivate-unfocused-windows
     disable-10bit-output
+    force-tearing
 }
 
 binds {
@@ -339,6 +340,16 @@ Until this is fixed in Smithay, you can disable 10-bit color formats by setting 
 ```kdl
 debug {
     disable-10bit-output
+}
+```
+
+### `force-tearing`
+
+Enables screen tearing unconditionally, overriding any [`allow-tearing`](./Configuration:-Window-Rules.md#allow-tearing) window rules.
+
+```kdl
+debug {
+    force-tearing
 }
 ```
 
