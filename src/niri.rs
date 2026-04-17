@@ -4712,6 +4712,22 @@ impl Niri {
         backend.set_output_on_demand_vrr(self, output, current);
     }
 
+    pub fn output_allows_tearing(&self, output: &Output) -> bool {
+        self.layout.windows_for_output(output).any(|mapped| {
+            mapped.rules().allow_tearing == Some(true) && {
+                let mut visible = false;
+                mapped.window.with_surfaces(|surface, states| {
+                    if !visible
+                        && surface_primary_scanout_output(surface, states).as_ref() == Some(output)
+                    {
+                        visible = true;
+                    }
+                });
+                visible
+            }
+        })
+    }
+
     pub fn update_primary_scanout_output(
         &self,
         output: &Output,

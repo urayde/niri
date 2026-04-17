@@ -1855,6 +1855,7 @@ mod tests {
                     clip_to_geometry: None,
                     baba_is_float: None,
                     block_out_from: None,
+                    allow_tearing: None,
                     variable_refresh_rate: None,
                     default_column_display: Some(
                         Tabbed,

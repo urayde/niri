@@ -1932,7 +1932,7 @@ impl Tty {
             };
             let mut flags = primary_scanout_flag | FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT;
 
-            let presentation_mode = if debug.force_tearing {
+            let presentation_mode = if debug.force_tearing || niri.output_allows_tearing(output) {
                 PresentationMode::Async
             } else {
                 PresentationMode::VSync
