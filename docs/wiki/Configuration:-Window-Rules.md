@@ -617,6 +617,19 @@ window-rule {
 }
 ```
 
+#### `allow-tearing`
+
+Allow screen tearing on an output where this window is visible.
+
+```kdl
+// Allow tearing only when osu! has keyboard focus.
+window-rule {
+    match app-id="^osu!$" is-focused=true
+
+    allow-tearing true
+}
+```
+
 #### `variable-refresh-rate`
 
 <sup>Since: 0.1.9</sup>

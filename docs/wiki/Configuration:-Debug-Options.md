@@ -33,6 +33,7 @@ debug {
     honor-xdg-activation-with-invalid-serial
     skip-cursor-only-updates-during-vrr
     deactivate-unfocused-windows
+    force-tearing
 }
 
 binds {
@@ -340,6 +341,16 @@ The old niri behavior with this setting enabled matches the new behavior.
 ```kdl
 debug {
     keep-max-bpc-unchanged
+}
+```
+
+### `force-tearing`
+
+Enables screen tearing unconditionally, overriding any [`allow-tearing`](./Configuration:-Window-Rules.md#allow-tearing) window rules.
+
+```kdl
+debug {
+    force-tearing
 }
 ```
 
