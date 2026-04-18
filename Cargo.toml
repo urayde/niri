@@ -27,12 +27,12 @@ tracy-client = { version = "0.18.4", default-features = false }
 
 [workspace.dependencies.smithay]
 git = "https://github.com/urayde/smithay.git"
-rev = "bf4053552901f7fa08b87f098e3ae96d1e6ad942"
+rev = "ad55b93eed7df0cdb610e7cf2a65fc18168353ba"
 default-features = false
 
 [workspace.dependencies.smithay-drm-extras]
 git = "https://github.com/urayde/smithay.git"
-rev = "bf4053552901f7fa08b87f098e3ae96d1e6ad942"
+rev = "ad55b93eed7df0cdb610e7cf2a65fc18168353ba"
 
 [package]
 name = "niri"

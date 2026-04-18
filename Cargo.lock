@@ -2642,9 +2642,9 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "orbclient"
-version = "0.3.51"
+version = "0.3.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59aed3b33578edcfa1bc96a321d590d31832b6ad55a26f0313362ce687e9abd6"
+checksum = "12c6933ddbbd16539a7672e697bb8d41ac3a4e99ac43eeb40c07236bd7fcb2dd"
 dependencies = [
  "libc",
  "libredox",
@@ -3498,7 +3498,7 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 [[package]]
 name = "smithay"
 version = "0.7.0"
-source = "git+https://github.com/urayde/smithay.git?rev=bf4053552901f7fa08b87f098e3ae96d1e6ad942#bf4053552901f7fa08b87f098e3ae96d1e6ad942"
+source = "git+https://github.com/urayde/smithay.git?rev=ad55b93eed7df0cdb610e7cf2a65fc18168353ba#ad55b93eed7df0cdb610e7cf2a65fc18168353ba"
 dependencies = [
  "aliasable",
  "appendlist",
@@ -3573,7 +3573,7 @@ dependencies = [
 [[package]]
 name = "smithay-drm-extras"
 version = "0.1.0"
-source = "git+https://github.com/urayde/smithay.git?rev=bf4053552901f7fa08b87f098e3ae96d1e6ad942#bf4053552901f7fa08b87f098e3ae96d1e6ad942"
+source = "git+https://github.com/urayde/smithay.git?rev=ad55b93eed7df0cdb610e7cf2a65fc18168353ba#ad55b93eed7df0cdb610e7cf2a65fc18168353ba"
 dependencies = [
  "drm",
  "libdisplay-info",
@@ -4028,11 +4028,11 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"
-version = "1.0.2+wasi-0.2.9"
+version = "1.0.3+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
+checksum = "20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.57.1",
 ]
 
 [[package]]
@@ -4041,7 +4041,7 @@ version = "0.4.0+wasi-0.3.0-rc-2026-01-06"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5428f8bf88ea5ddc08faddef2ac4a67e390b88186c703ce6dbd955e1c145aca5"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.51.0",
 ]
 
 [[package]]
@@ -4582,6 +4582,12 @@ checksum = "d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5"
 dependencies = [
  "wit-bindgen-rust-macro",
 ]
+
+[[package]]
+name = "wit-bindgen"
+version = "0.57.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "wit-bindgen-core"
