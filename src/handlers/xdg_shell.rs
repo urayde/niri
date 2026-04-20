@@ -24,6 +24,7 @@ use smithay::wayland::compositor::{
     HookId, SurfaceAttributes,
 };
 use smithay::wayland::dmabuf::get_dmabuf;
+use smithay::wayland::drm_syncobj::DrmSyncobjCachedState;
 use smithay::wayland::input_method::InputMethodSeat;
 use smithay::wayland::shell::kde::decoration::{KdeDecorationHandler, KdeDecorationState};
 use smithay::wayland::shell::wlr_layer::{self, Layer};
@@ -1492,6 +1493,34 @@ fn unconstrain_with_padding(
 
 pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId {
     add_pre_commit_hook::<State, _>(toplevel.wl_surface(), move |state, _dh, surface| {
+        macro_rules! try_add_pre_commit_blocker {
+            ($state:expr, $surface:expr, $client:expr, $blocker:expr, $source:expr, $tx:expr, $label:expr) => {{
+                let mut tx = $tx.clone();
+                let client = $client.clone();
+                let res = $state
+                    .niri
+                    .event_loop
+                    .insert_source($source, move |_, _, state| {
+                        // This surface is now ready for the transaction.
+                        drop(tx.take());
+
+                        let display_handle = state.niri.display_handle.clone();
+                        state
+                            .client_compositor_state(&client)
+                            .blocker_cleared(state, &display_handle);
+
+                        Ok(())
+                    });
+                if res.is_ok() {
+                    add_blocker($surface, $blocker);
+                    trace!("added {} blocker", $label);
+                    true
+                } else {
+                    false
+                }
+            }};
+        }
+
         let _span = tracy_client::span!("mapped toplevel pre-commit");
         let span =
             trace_span!("toplevel pre-commit", surface = %surface.id(), serial = Empty).entered();
@@ -1501,7 +1530,7 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
             return;
         };
 
-        let (got_unmapped, dmabuf, commit_serial) = with_states(surface, |states| {
+        let (got_unmapped, acquire_point, dmabuf, commit_serial) = with_states(surface, |states| {
             let (got_unmapped, dmabuf) = {
                 let mut guard = states.cached_state.get::<SurfaceAttributes>();
                 match guard.pending().buffer.as_ref() {
@@ -1522,7 +1551,14 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
                 .unwrap();
             let serial = role.last_acked.as_ref().map(|c| c.serial);
 
-            (got_unmapped, dmabuf, serial)
+            let acquire_point = states
+                .cached_state
+                .get::<DrmSyncobjCachedState>()
+                .pending()
+                .acquire_point
+                .clone();
+
+            (got_unmapped, acquire_point, dmabuf, serial)
         });
 
         let mut transaction_for_dmabuf = None;
@@ -1571,27 +1607,35 @@ pub fn add_mapped_toplevel_pre_commit_hook(toplevel: &ToplevelSurface) -> HookId
             error!("commit on a mapped surface without a configured serial");
         };
 
-        if let Some((blocker, source)) =
-            dmabuf.and_then(|dmabuf| dmabuf.generate_blocker(Interest::READ).ok())
-        {
-            if let Some(client) = surface.client() {
-                let res = state
-                    .niri
-                    .event_loop
-                    .insert_source(source, move |_, _, state| {
-                        // This surface is now ready for the transaction.
-                        drop(transaction_for_dmabuf.take());
+        if let Some(client) = surface.client() {
+            if let Some(dmabuf) = dmabuf {
+                let mut blocker_added = false;
+                if let Some(acquire_point) = acquire_point {
+                    if let Ok((blocker, source)) = acquire_point.generate_blocker() {
+                        blocker_added = try_add_pre_commit_blocker!(
+                            state,
+                            surface,
+                            client,
+                            blocker,
+                            source,
+                            transaction_for_dmabuf,
+                            "syncobj"
+                        );
+                    }
+                }
 
-                        let display_handle = state.niri.display_handle.clone();
-                        state
-                            .client_compositor_state(&client)
-                            .blocker_cleared(state, &display_handle);
-
-                        Ok(())
-                    });
-                if res.is_ok() {
-                    add_blocker(surface, blocker);
-                    trace!("added dmabuf blocker");
+                if !blocker_added {
+                    if let Ok((blocker, source)) = dmabuf.generate_blocker(Interest::READ) {
+                        let _ = try_add_pre_commit_blocker!(
+                            state,
+                            surface,
+                            client,
+                            blocker,
+                            source,
+                            transaction_for_dmabuf,
+                            "dmabuf"
+                        );
+                    }
                 }
             }
         }

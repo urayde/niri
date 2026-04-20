@@ -81,6 +81,7 @@ use smithay::wayland::compositor::{
 };
 use smithay::wayland::cursor_shape::CursorShapeManagerState;
 use smithay::wayland::dmabuf::DmabufState;
+use smithay::wayland::drm_syncobj::{supports_syncobj_eventfd, DrmSyncobjState};
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::idle_inhibit::IdleInhibitManagerState;
 use smithay::wayland::idle_notify::IdleNotifierState;
@@ -291,6 +292,7 @@ pub struct Niri {
     pub shm_state: ShmState,
     pub output_manager_state: OutputManagerState,
     pub dmabuf_state: DmabufState,
+    pub syncobj_state: Option<DrmSyncobjState>,
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub seat_state: SeatState<State>,
     pub tablet_state: TabletManagerState,
@@ -2572,6 +2574,7 @@ impl Niri {
             shm_state,
             output_manager_state,
             dmabuf_state,
+            syncobj_state: None,
             fractional_scale_manager_state,
             seat_state,
             tablet_state,
@@ -4984,6 +4987,45 @@ impl Niri {
                 |_, _, _| true,
             );
         }
+    }
+
+    pub fn add_syncobj_state(&mut self, device_fd: smithay::backend::drm::DrmDeviceFd) {
+        let disable_syncobj = env::var_os("NIRI_DISABLE_SYNCOBJ").is_some();
+        if !supports_syncobj_eventfd(&device_fd) || disable_syncobj {
+            self.remove_syncobj_state();
+            return;
+        }
+
+        if let Some(state) = self.syncobj_state.as_mut() {
+            state.update_device(device_fd);
+        } else {
+            self.syncobj_state = Some(DrmSyncobjState::new::<State>(
+                &self.display_handle,
+                device_fd,
+            ))
+        }
+        debug!("explicit sync enabled for primary gpu")
+    }
+
+    pub fn remove_syncobj_state(&mut self) {
+        let Some(state) = self.syncobj_state.take() else {
+            return;
+        };
+
+        let global = state.into_global();
+        self.display_handle.disable_global::<State>(global.clone());
+        self.event_loop
+            .insert_source(
+                Timer::from_duration(Duration::from_secs(10)),
+                move |_, _, state| {
+                    state
+                        .niri
+                        .display_handle
+                        .remove_global::<State>(global.clone());
+                    TimeoutAction::Drop
+                },
+            )
+            .unwrap();
     }
 
     pub fn send_dmabuf_feedbacks(
