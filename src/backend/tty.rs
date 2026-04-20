@@ -896,6 +896,8 @@ impl Tty {
                 );
             assert!(self.dmabuf_global.replace(dmabuf_global).is_none());
 
+            niri.add_syncobj_state(drm.device_fd().clone());
+
             // Update the dmabuf feedbacks for all surfaces.
             for (node, device) in self.devices.iter_mut() {
                 for surface in device.surfaces.values_mut() {
@@ -1211,6 +1213,7 @@ impl Tty {
 
                 // Disable and destroy the dmabuf global.
                 if let Some(global) = self.dmabuf_global.take() {
+                    niri.remove_syncobj_state();
                     niri.dmabuf_state
                         .disable_global::<State>(&niri.display_handle, &global);
                     niri.event_loop
