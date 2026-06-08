@@ -256,6 +256,9 @@ impl CompositorHandler for State {
                     let toplevel = unmapped.window.toplevel().expect("no x11 support").clone();
                     self.queue_initial_configure(toplevel);
                 }
+
+                // Clear fifo barriers on unmapped surfaces to ensure forward progress
+                self.niri.signal_fifo_unmapped();
                 return;
             }
 

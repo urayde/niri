@@ -56,7 +56,9 @@ use smithay::reexports::input::Libinput;
 use smithay::reexports::rustix::fs::OFlags;
 use smithay::reexports::wayland_protocols;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::reexports::wayland_server::Client;
 use smithay::utils::{DeviceFd, Transform};
+use smithay::wayland::compositor::Barrier;
 use smithay::wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal};
 use smithay::wayland::drm_lease::{
     DrmLease, DrmLeaseBuilder, DrmLeaseRequest, DrmLeaseState, LeaseRejected,
@@ -129,7 +131,7 @@ pub type TtyRendererError<'render> = <TtyRenderer<'render> as RendererSuper>::Er
 type GbmDrmCompositor = DrmCompositor<
     GbmAllocator<DrmDeviceFd>,
     GbmFramebufferExporter<DrmDeviceFd>,
-    (OutputPresentationFeedback, Duration),
+    (OutputPresentationFeedback, Duration, Vec<(Barrier, Client)>),
     DrmDeviceFd,
 >;
 
@@ -1758,7 +1760,7 @@ impl Tty {
 
         // Mark the last frame as submitted.
         match surface.compositor.frame_submitted() {
-            Ok((mut feedback, target_presentation_time)) => {
+            Ok((mut feedback, target_presentation_time, fifo_barriers)) => {
                 let refresh = match refresh_interval {
                     Some(refresh) => {
                         if output_state.frame_clock.vrr() {
@@ -1792,6 +1794,11 @@ impl Tty {
                         misprediction_s * 1000.,
                     );
                 }
+
+                for (barrier, client) in fifo_barriers {
+                    barrier.signal();
+                    let _ = niri.blocker_cleared_tx.send(client);
+                }
             }
             Err(FrameError::EmptyFrame) => (),
             Err(err) => {
@@ -1822,7 +1829,7 @@ impl Tty {
         }
     }
 
-    fn on_estimated_vblank_timer(&self, niri: &mut Niri, output: Output) {
+    fn on_estimated_vblank_timer(&self, niri: &mut Niri, output: Output) -> Output {
         let span = tracy_client::span!("Tty::on_estimated_vblank_timer");
 
         let name = output.name();
@@ -1830,7 +1837,7 @@ impl Tty {
 
         let Some(output_state) = niri.output_state.get_mut(&output) else {
             error!("missing output state for {name}");
-            return;
+            return output;
         };
 
         // We waited for the timer, now we can send frame callbacks again.
@@ -1844,7 +1851,7 @@ impl Tty {
             // The timer fired just in front of a redraw.
             RedrawState::WaitingForEstimatedVBlankAndQueued(_) => {
                 output_state.redraw_state = RedrawState::Queued;
-                return;
+                return output;
             }
         }
 
@@ -1853,6 +1860,8 @@ impl Tty {
         } else {
             niri.send_frame_callbacks(&output);
         }
+
+        output
     }
 
     pub fn seat_name(&self) -> String {
@@ -1996,7 +2005,12 @@ impl Tty {
                 if !res.is_empty {
                     let presentation_feedbacks =
                         niri.take_presentation_feedbacks(output, &res.states);
-                    let data = (presentation_feedbacks, target_presentation_time);
+                    let fifo_barriers = niri.get_fifo_barriers(output);
+                    let data = (
+                        presentation_feedbacks,
+                        target_presentation_time,
+                        fifo_barriers,
+                    );
 
                     match drm_compositor.queue_frame(data) {
                         Ok(()) => {
@@ -3074,9 +3088,19 @@ fn queue_estimated_vblank_timer(
     let token = niri
         .event_loop
         .insert_source(timer, move |_, _, data| {
-            data.backend
+            let output = data
+                .backend
                 .tty()
                 .on_estimated_vblank_timer(&mut data.niri, output.clone());
+
+            let idle = data
+                .niri
+                .output_state
+                .get(&output)
+                .is_some_and(|state| matches!(state.redraw_state, RedrawState::Idle));
+            if idle {
+                data.niri.signal_fifo(&output);
+            }
             TimeoutAction::Drop
         })
         .unwrap();

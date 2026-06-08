@@ -76,12 +76,13 @@ use smithay::utils::{
 };
 use smithay::wayland::background_effect::BackgroundEffectState;
 use smithay::wayland::compositor::{
-    with_states, with_surface_tree_downward, CompositorClientState, CompositorHandler,
+    with_states, with_surface_tree_downward, Barrier, CompositorClientState, CompositorHandler,
     CompositorState, HookId, SurfaceData, TraversalAction,
 };
 use smithay::wayland::cursor_shape::CursorShapeManagerState;
 use smithay::wayland::dmabuf::DmabufState;
 use smithay::wayland::drm_syncobj::{supports_syncobj_eventfd, DrmSyncobjState};
+use smithay::wayland::fifo::{FifoBarrierCachedState, FifoManagerState};
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::idle_inhibit::IdleInhibitManagerState;
 use smithay::wayland::idle_notify::IdleNotifierState;
@@ -318,6 +319,7 @@ pub struct Niri {
     pub gamma_control_manager_state: GammaControlManagerState,
     pub activation_state: XdgActivationState,
     pub mutter_x11_interop_state: MutterX11InteropManagerState,
+    pub fifo_manager_state: FifoManagerState,
 
     // This will not work as is outside of tests, so it is gated with #[cfg(test)] for now. In
     // particular, shaders will need to learn about the single pixel buffer. Also, it must be
@@ -2402,6 +2404,7 @@ impl Niri {
 
         let mutter_x11_interop_state =
             MutterX11InteropManagerState::new::<State, _>(&display_handle, move |_| true);
+        let fifo_manager_state = FifoManagerState::new::<State>(&display_handle);
 
         #[cfg(test)]
         let single_pixel_buffer_state = SinglePixelBufferState::new::<State>(&display_handle);
@@ -2599,6 +2602,7 @@ impl Niri {
             gamma_control_manager_state,
             activation_state,
             mutter_x11_interop_state,
+            fifo_manager_state,
             #[cfg(test)]
             single_pixel_buffer_state,
 
@@ -3686,6 +3690,119 @@ impl Niri {
         self.layout.outputs().find(has_layer_surface)
     }
 
+    pub fn for_each_output_surface(
+        &self,
+        output: &Output,
+        mut f: impl FnMut(&WlSurface, &SurfaceData),
+    ) {
+        let Some(output_state) = self.output_state.get(output) else {
+            return;
+        };
+
+        for mapped in self.layout.windows_for_output(output) {
+            mapped
+                .window
+                .with_surfaces(|surface, states| f(surface, states));
+        }
+
+        for surface in layer_map_for_output(output).layers() {
+            surface.with_surfaces(|surface, states| f(surface, states));
+        }
+
+        if let Some(surface) = &output_state.lock_surface {
+            with_surfaces_surface_tree(surface.wl_surface(), |surface, states| {
+                f(surface, states);
+            });
+        }
+
+        if let Some(surface) = self.dnd_icon.as_ref().map(|icon| &icon.surface) {
+            with_surfaces_surface_tree(surface, |surface, states| f(surface, states));
+        }
+
+        if let CursorImageStatus::Surface(surface) = self.cursor_manager.cursor_image() {
+            with_surfaces_surface_tree(surface, |surface, states| f(surface, states));
+        }
+    }
+
+    pub fn get_fifo_barriers(&self, output: &Output) -> Vec<(Barrier, Client)> {
+        let mut barriers = Vec::new();
+
+        self.for_each_output_surface(output, |surface, states| {
+            if !states.cached_state.has::<FifoBarrierCachedState>() {
+                return;
+            }
+
+            let primary_scanout_output = surface_primary_scanout_output(surface, states);
+            if primary_scanout_output.as_ref().is_some_and(|o| o != output) {
+                return;
+            }
+
+            let fifo_barrier = states
+                .cached_state
+                .get::<FifoBarrierCachedState>()
+                .current()
+                .barrier
+                .clone();
+
+            if let Some(fifo_barrier) = fifo_barrier {
+                if !fifo_barrier.is_signaled() {
+                    if let Some(client) = surface.client() {
+                        barriers.push((fifo_barrier, client));
+                    }
+                }
+            }
+        });
+
+        barriers
+    }
+
+    pub fn signal_fifo(&self, output: &Output) {
+        let tx = self.blocker_cleared_tx.clone();
+
+        self.for_each_output_surface(output, |surface, states| {
+            if !states.cached_state.has::<FifoBarrierCachedState>() {
+                return;
+            }
+
+            let primary_scanout_output = surface_primary_scanout_output(surface, states);
+            if primary_scanout_output.as_ref().is_some_and(|o| o != output) {
+                return;
+            }
+
+            Self::signal_fifo_surface(surface, states, &tx);
+        });
+
+        self.signal_fifo_unmapped();
+    }
+
+    pub fn signal_fifo_unmapped(&self) {
+        let tx = self.blocker_cleared_tx.clone();
+
+        for unmapped in self.unmapped_windows.values() {
+            unmapped.window.with_surfaces(|surface, states| {
+                if states.cached_state.has::<FifoBarrierCachedState>() {
+                    Self::signal_fifo_surface(surface, states, &tx);
+                }
+            });
+        }
+    }
+
+    fn signal_fifo_surface(surface: &WlSurface, states: &SurfaceData, tx: &Sender<Client>) {
+        let fifo_barrier = states
+            .cached_state
+            .get::<FifoBarrierCachedState>()
+            .current()
+            .barrier
+            .take();
+
+        if let Some(fifo_barrier) = fifo_barrier {
+            fifo_barrier.signal();
+            if let Some(client) = surface.client() {
+                let _ = tx.send(client);
+            }
+        }
+    }
+
     pub fn lock_surface_focus(&self) -> Option<WlSurface> {
         let output_under_cursor = self.output_under_cursor();
         let output = output_under_cursor
@@ -3722,6 +3839,11 @@ impl Niri {
             trace!("redrawing output");
             let output = output.clone();
             self.redraw(backend, &output);
+
+            let state = self.output_state.get(&output).unwrap();
+            if matches!(state.redraw_state, RedrawState::Idle) {
+                self.signal_fifo(&output);
+            }
         }
     }
 
