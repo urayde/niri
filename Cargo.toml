@@ -26,16 +26,13 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tracy-client = { version = "0.18.5", default-features = false }
 
 [workspace.dependencies.smithay]
-# version = "0.4.1"
-git = "https://github.com/Smithay/smithay.git"
-rev = "79bbed5e1199090d787115614847a79c76607181"
+git = "https://github.com/urayde/smithay.git"
+rev = "d8071318385bdb391b861c3153f7236bfe36c644"
 default-features = false
 
 [workspace.dependencies.smithay-drm-extras]
-# version = "0.1.0"
-git = "https://github.com/Smithay/smithay.git"
-rev = "79bbed5e1199090d787115614847a79c76607181"
-# path = "../smithay/smithay-drm-extras"
+git = "https://github.com/urayde/smithay.git"
+rev = "d8071318385bdb391b861c3153f7236bfe36c644"
 
 [package]
 name = "niri"
@@ -150,7 +147,6 @@ new_without_default = "allow"
 collapsible_match = "allow"
 
 [profile.release]
-debug = "line-tables-only"
 overflow-checks = true
 lto = "thin"
 
